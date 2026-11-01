@@ -1,0 +1,43 @@
+def diagnose(history):
+    tr_acc, va_acc = history["train_acc"][-1], history["val_acc"][-1]
+    gap = tr_acc - va_acc
+    print(f"train {tr_acc:.3f}  val {va_acc:.3f}  gap {gap:.3f}")
+    if gap > 0.08:
+        print("Overfitting")
+    elif tr_acc < 0.7:
+        print("Underfitting")
+    else:
+        print("Looks balanced")
+
+
+class RegularisedCNN(nn.Module):
+    def __init__(self, width=64, dropout=0.3):
+        super().__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(3, width, 3, padding=1), nn.BatchNorm2d(width), nn.ReLU(), nn.MaxPool2d(2),
+            nn.Conv2d(width, width * 2, 3, padding=1), nn.BatchNorm2d(width * 2), nn.ReLU(), nn.MaxPool2d(2),
+            nn.Conv2d(width * 2, width * 2, 3, padding=1), nn.BatchNorm2d(width * 2), nn.ReLU(), nn.MaxPool2d(2),
+            nn.Dropout(dropout),
+        )
+        self.classifier = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(width * 2 * 4 * 4, 128), nn.ReLU(), nn.Dropout(dropout + 0.2),
+            nn.Linear(128, 10),
+        )
+
+    def forward(self, x):
+        return self.classifier(self.features(x))
+
+
+baseline = CNN().to(device)
+base_hist = fit(baseline, epochs=15)
+diagnose(base_hist)
+
+fixed = RegularisedCNN().to(device)
+fixed_hist = fit(fixed, epochs=40, lr=1e-3, weight_decay=1e-4, patience=5, loader=aug_loader)
+diagnose(fixed_hist)
+plot_history(fixed_hist)
+
+weak = RegularisedCNN(width=128, dropout=0.0).to(device)
+weak_hist = fit(weak, epochs=30, lr=2e-3, loader=aug_loader)
+diagnose(weak_hist)
