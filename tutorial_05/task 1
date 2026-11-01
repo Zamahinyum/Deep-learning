@@ -1,0 +1,43 @@
+def make_cnn(filters=(32, 64, 64), kernel=3, fc_units=(64,)):
+    layers, in_ch = [], 3
+    for i, f in enumerate(filters):
+        layers += [nn.Conv2d(in_ch, f, kernel, padding=kernel // 2), nn.ReLU()]
+        if i < len(filters) - 1:
+            layers.append(nn.MaxPool2d(2))
+        in_ch = f
+    features = nn.Sequential(*layers)
+
+    with torch.no_grad():
+        flat = features(torch.zeros(1, 3, 32, 32)).numel()
+
+    head, in_f = [nn.Flatten()], flat
+    for u in fc_units:
+        head += [nn.Linear(in_f, u), nn.ReLU()]
+        in_f = u
+    head.append(nn.Linear(in_f, 10))
+    return nn.Sequential(features, *head)
+
+
+configs = {
+    "original": dict(),
+    "5x5 kernel": dict(kernel=5),
+    "wider filters": dict(filters=(64, 128, 128)),
+    "extra conv layer": dict(filters=(32, 64, 64, 128)),
+    "extra dense layers": dict(fc_units=(256, 128, 64)),
+}
+
+scores = {}
+for name, cfg in configs.items():
+    print(f"\n{name}")
+    net = make_cnn(**cfg).to(device)
+    hist = fit(net, epochs=10)
+    scores[name] = max(hist["val_acc"])
+
+for name, acc in scores.items():
+    print(f"{name:20s} {acc:.4f}")
+
+plt.bar(scores.keys(), scores.values())
+plt.xticks(rotation=20)
+plt.ylabel("Best validation accuracy")
+plt.tight_layout()
+plt.show()
